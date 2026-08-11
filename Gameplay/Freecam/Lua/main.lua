@@ -250,6 +250,7 @@ local panmom = {
 	angle = 0,
 	aiming = 0
 }
+local TICCMD_RECIEVED = 1 -- ouuuu
 addHook("PlayerCmd",function(p, cmd)
 	if not freecam_active then return end
 	
@@ -384,7 +385,7 @@ addHook("PlayerCmd",function(p, cmd)
 	
 	cmd.forwardmove = 0
 	cmd.sidemove = 0
-	cmd.angleturn = p.cmd.angleturn
+	cmd.angleturn = p.cmd.angleturn &~TICCMD_RECIEVED
 	cmd.aiming = p.cmd.aiming
 	cmd.buttons = 0	
 end)
