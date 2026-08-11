@@ -1,3 +1,5 @@
+local TR = TICRATE
+
 local function P_ClosestPointOnLine3D(p, lstart, lend)
 	local t,d
 	local V = Vec3.Sub(lend, lstart)
@@ -23,10 +25,14 @@ local ANGLETURN = 0
 local ANGLETURN2 = 0
 local AIMING = 0
 addHook("PlayerCmd",function(p,cmd)
-	if p == consoleplayer
-		ANGLETURN = cmd.angleturn<<16
-		ANGLETURN2 = ANGLETURN
-		AIMING = cmd.aiming<<16
+	ANGLETURN = cmd.angleturn<<16
+	ANGLETURN2 = ANGLETURN
+	AIMING = cmd.aiming<<16
+	
+	if (p.realmo.flags2 & MF2_TWOD or twodlevel)
+		if cmd.sidemove == 0
+			cmd.sidemove = cmd.forwardmove
+		end
 	end
 end)
 addHook("PlayerSpawn",function(p)
@@ -39,7 +45,10 @@ end)
 local cv_camdist = CV_FindVar("cam_dist")
 local cv_camheight = CV_FindVar("cam_height")
 local sidefrac = 0
+local idletime = 0
+local twodanim = 0
 local blockingmobjs = {}
+local movewasblocked = false
 addHook("PostThinkFrame", do
 	--if leveltime == 0 then return end
 	local p = displayplayer
@@ -77,6 +86,8 @@ addHook("PostThinkFrame", do
 	AIMING = FixedAngle(aim)
 	*/
 	
+	local camflip = P_MobjFlip(me)
+	
 	local camdist = FixedMul(cv_camdist.value, me.scale)
 	camdist = FixedMul($, p.camerascale)
 	camdist = $ + (20*FU - 20*me.scale)
@@ -84,19 +95,64 @@ addHook("PostThinkFrame", do
 	camheight = $ - (16*FU - 16*me.scale)
 	
 	local focusPos = Vec3.MobjPosToVec(me)
-	focusPos.z = $ + (41*P_GetPlayerHeight(p)/48) + camheight
+	focusPos.z = $ + ((41*P_GetPlayerHeight(p)/48) + camheight)*camflip
 	
-	if (p.cmd.buttons & BT_ATTACK)
-		sidefrac = P_Lerp(FU/6, $, FU)
+	local shiftVec = Vec3.New(0,0,0)
+	
+	local twod = (me.flags2 & MF2_TWOD or twodlevel)
+	if twod
+		twodanim = P_Lerp(FU/3, $, FU)
+		
+		camdist = $ * 2
+		local runspeed = FixedMul(skins[p.skin].normalspeed * 6/10, me.scale)
+		local speedfrac = min(abs(FixedDiv(me.momx, runspeed)), FU)
+		local movefrac = abs(FixedDiv(p.cmd.sidemove*FU, 50*FU))
+		movefrac = FixedMul($, speedfrac)
+		
+		local pushfactor = p.cmd.sidemove
+		local dopush = abs(pushfactor) > 10
+		if p.cmd.sidemove == 0 and abs(me.momx) > runspeed
+			pushfactor = me.momx
+			dopush = true
+			movefrac = speedfrac
+		end
+		
+		if dopush
+		-- and P_CheckSight(cammo, me)
+		and not movewasblocked
+			sidefrac = P_Lerp(FixedMul(FU/10, movefrac), $, FU * sign(pushfactor))
+			idletime = 0
+		else
+			if not P_CheckSight(cammo, me)
+				sidefrac = P_Lerp(FU/15, $, 0)
+			end
+			idletime = $ + 1
+			
+			if idletime >= 3*TR
+			or p.exiting
+				sidefrac = P_Lerp(FU/15, $, 0)
+			end
+		end
+		
+		shiftVec = Vec3.New(camdist * 2/5, 0,0) * sidefrac
+		if me.momz * P_MobjFlip(me) < 0
+			shiftVec.z = $ + me.momz
+		end
 	else
-		sidefrac = P_Lerp(FU/6, $, 0)
+		twodanim = P_Lerp(FU/3, $, 0)
+		sidefrac = P_Lerp(FU/2, $, 0)
 	end
-	-- ANGLETURN = $ + FixedAngle(45*sidefrac)
+	if twodanim
+		ANGLETURN = P_Lerp(twodanim, $, ANGLE_90)
+		ANGLETURN2 = ANGLETURN
+	end
+	
+	movewasblocked = false
 	
 	local adjustVec = Vec3.SphereToCartesian(ANGLETURN, AIMING) * (-camdist)
 	adjustVec = focusPos + adjustVec
-	-- clipping
-	if not (me.flags & (MF_NOCLIP|MF_NOCLIPHEIGHT) or p.powers[pw_carry] == CR_NIGHTSMODE)
+	-- clipping / poppercam
+	if not (me.flags & (MF_NOCLIP|MF_NOCLIPHEIGHT) or p.powers[pw_carry] == CR_NIGHTSMODE or twod)
 		local camSec = R_PointInSubsector(adjustVec.x,adjustVec.y).sector
 		if camSec.camsec
 			camSec = camSec.camsec -- lol
@@ -177,10 +233,12 @@ addHook("PostThinkFrame", do
 				adjustVec = Vec3.SphereToCartesian(ANGLETURN, AIMING) * (-newdist)
 				adjustVec = focusPos + adjustVec
 				adjustVec.z = bound
+				movewasblocked = true
 				--print("not wall")
 				--print(("%f"):format(adjustVec.z))
 			elseif adjustVec.z < me.z
 				adjustVec.z = me.z
+				movewasblocked = true
 			end
 		end
 	end
@@ -193,7 +251,7 @@ addHook("PostThinkFrame", do
 	*/
 	-- invisicam
 	if (p.playerstate == PST_LIVE)
-		Vec3.ToMobjPos(adjustVec, cammo, true, false)
+		Vec3.ToMobjPos(adjustVec + shiftVec, cammo, true, false)
 		
 		local checkplayers = (gametyperules & GTR_FRIENDLY) == 0
 		local ray = P_SpawnMobjFromMobj(cammo,
@@ -279,6 +337,7 @@ addHook("PostThinkFrame", do
 		AIMING = va
 	end
 	
+	P_TeleportCameraMove(camera, cammo.x, cammo.y, cammo.z)
 	cammo.angle = ANGLETURN2
 	if camera.chase and not freecam_active
 		p.awayviewaiming = AIMING
