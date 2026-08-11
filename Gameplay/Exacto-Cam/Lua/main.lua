@@ -25,6 +25,8 @@ local ANGLETURN = 0
 local ANGLETURN2 = 0
 local AIMING = 0
 addHook("PlayerCmd",function(p,cmd)
+	if p ~= consoleplayer then return end
+	
 	ANGLETURN = cmd.angleturn<<16
 	ANGLETURN2 = ANGLETURN
 	AIMING = cmd.aiming<<16
