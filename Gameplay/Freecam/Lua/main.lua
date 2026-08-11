@@ -424,6 +424,7 @@ local function LoadState(cam)
 	P_SetOrigin(cam,
 		freecam_vars.x, freecam_vars.y, freecam_vars.z
 	)
+	freecam_view = {freecam_vars.x, freecam_vars.y, freecam_vars.z}
 	cam.momx = freecam_vars.momx
 	cam.momy = freecam_vars.momy
 	cam.momz = freecam_vars.momz
@@ -437,16 +438,17 @@ end
 addHook("PostThinkFrame",do
 	if not freecam_active then return end
 	if not (freecam_mo and freecam_mo.valid)
-		freecam_mo = P_SpawnMobjFromMobj(p.realmo, 0,0,0, MT_RAY)
+	and (consoleplayer and consoleplayer.valid and consoleplayer.realmo.valid)
+		freecam_mo = P_SpawnMobjFromMobj(consoleplayer.realmo, 0,0,0, MT_RAY)
 		freecam_mo.height = camera.height
 		freecam_mo.radius = camera.radius
 		
 		freecam_mo.tics = -1
 		freecam_mo.fuse = -1
-		freecam_mo.flags2 = $|MF2_DONTDRAW|(p.realmo.flags2 & MF2_OBJECTFLIP)
+		freecam_mo.flags2 = $|MF2_DONTDRAW|(consoleplayer.realmo.flags2 & MF2_OBJECTFLIP)
 		freecam_mo.flags = MF_NOCLIPTHING|MF_NOCLIP|MF_NOCLIPHEIGHT|MF_NOGRAVITY|MF_NOTHINK|MF_SLIDEME
 		
-		freecam_mo.tracer = p.realmo
+		freecam_mo.tracer = consoleplayer.realmo
 		
 		LoadState(freecam_mo)
 		camera.chase = true
