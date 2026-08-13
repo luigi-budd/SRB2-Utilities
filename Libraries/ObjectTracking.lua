@@ -1,6 +1,20 @@
 local cv_fov
 local cv_glshearing
 
+local LocalAngles = {
+	[0] = { -- consoleplayer
+		angle = 0, aiming = 0,
+	},
+	[1] = { -- secondarydisplayplayer
+		angle = 0, aiming = 0
+	}
+}
+addHook("PlayerCmd",function(p,cmd)
+	local angset = (p == consoleplayer) and LocalAngles[0] or LocalAngles[1]
+	angset.angle = cmd.angleturn << 16
+	angset.aiming = cmd.aiming << 16
+end)
+
 /*
 	Code updated in Lua by GenericHeroGuy for libSG
 	Ported to C by NepDisk and acutally made to work and fixed by Indev!(Thanks so much!)
@@ -66,10 +80,15 @@ rawset(_G, "K_GetScreenCoords",function(vid,p,cam, point, props)
 		elseif (SUBVERSION < 16) --assuming camera fix was merged into 2.2.16, and we're on 2.2.15
 			local m = p.realmo
 			camPos = {x = m.x, y = m.y, z = p.viewz}
-			--sglib uses p.realmo.angle, so...
-			camAngle = m.angle
-			camAiming = p.aiming
-		--if we ARE on 2.2.16 then do nothing, everythings already correct
+			
+			if (p == consoleplayer or p == secondarydisplayplayer)
+				local angset = LocalAngles[(p == secondarydisplayplayer and 1 or 0)]
+				camAngle = angset.angle
+				camAiming = angset.aiming
+			else
+				camAngle = m.angle
+				camAiming = p.aiming
+			end
 		end
 	end
 	if (p.awayviewmobj and p.awayviewmobj.valid and p.awayviewtics > 0)
@@ -229,18 +248,3 @@ rawset(_G, "K_GetScreenCoords",function(vid,p,cam, point, props)
 		camPos = camPos,
 	}
 end)
-
-addHook("HUD",function(v,p,c)
-	if not (p.realmo and p.realmo.valid) then return end
-	
-	local result = K_GetScreenCoords(v,p,c, p.realmo)
-	if not result.onscreen then return end
-
-	if v.interpolate ~= nil
-		v.interpolate(true)
-	end
-	v.drawScaled(result.x,result.y, 4*result.scale, v.cachePatch("CROSHAI2"), 0)
-	if v.interpolate ~= nil
-		v.interpolate(false)
-	end
-end, "game")
