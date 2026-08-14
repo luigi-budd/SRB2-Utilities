@@ -67,6 +67,11 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 	local me = p.realmo
 	if not (me and me.valid) then return end
 	
+	if (p.awayviewtics > 0)
+	and (p.awayviewmobj ~= cammo)
+		return
+	end
+	
 	if (p.powers[pw_carry] == CR_NIGHTSFALL or p.powers[pw_carry] == CR_NIGHTSMODE) then return end
 	
 	if not (cammo and cammo.valid)
