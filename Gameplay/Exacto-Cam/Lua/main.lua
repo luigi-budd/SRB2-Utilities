@@ -1,3 +1,12 @@
+local MYVERSION = 100
+local ADDHOOK = true
+if rawget(_G, "ExactoCam_Version")
+	if ExactoCam_Version == MYVERSION then return end
+	
+	ADDHOOK = (ExactoCam_Version < MYVERSION)
+end
+rawset(_G,"ExactoCam_Version", MYVERSION)
+
 local TR = TICRATE
 
 local function P_ClosestPointOnLine3D(p, lstart, lend)
@@ -46,14 +55,14 @@ end)
 
 local cv_camdist = CV_FindVar("cam_dist")
 local cv_camheight = CV_FindVar("cam_height")
+local cv_camrotate = CV_FindVar("cam_rotate")
 local sidefrac = 0
 local idletime = 0
 local twodanim = 0
 local blockingmobjs = {}
 local movewasblocked = false
-addHook("PostThinkFrame", do
+rawset(_G, "ExactoCam_Thinker", function(p, camera)
 	--if leveltime == 0 then return end
-	local p = displayplayer
 	if not (p and p.valid) then return end
 	local me = p.realmo
 	if not (me and me.valid) then return end
@@ -337,9 +346,16 @@ addHook("PostThinkFrame", do
 		local ha,va = R_PointTo3DAngles(cammo.x,cammo.y,cammo.z, focusPos.x,focusPos.y,focusPos.z)
 		ANGLETURN2 = ha
 		AIMING = va
+		
+		local dist = R_PointTo3DDist(cammo.x,cammo.y,cammo.z, focusPos.x,focusPos.y,focusPos.z)
+		if dist > camdist
+			local adjust = dist - camdist
+			local moveVec = Vec3.SphereToCartesian(ha,va) * adjust
+			moveVec:ToMobjPos(cammo, false, false)
+		end
 	end
 	
-	P_TeleportCameraMove(camera, cammo.x, cammo.y, cammo.z)
+	-- P_TeleportCameraMove(camera, cammo.x, cammo.y, cammo.z)
 	cammo.angle = ANGLETURN2
 	if camera.chase and not freecam_active
 		p.awayviewaiming = AIMING
@@ -349,3 +365,10 @@ addHook("PostThinkFrame", do
 		p.awayviewmobj = nil
 	end
 end)
+
+if ADDHOOK
+	addHook("PostThinkFrame",do
+		if (gamestate ~= GS_LEVEL) then return end
+		ExactoCam_Thinker(displayplayer, camera)
+	end)
+end
