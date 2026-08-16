@@ -1,4 +1,4 @@
-local MYVERSION = 100
+local MYVERSION = 101
 local ADDHOOK = true
 if rawget(_G, "ExactoCam_Version")
 	if ExactoCam_Version == MYVERSION then return end
@@ -352,11 +352,17 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 		ANGLETURN2 = ha
 		AIMING = va
 		
-		local dist = R_PointTo3DDist(cammo.x,cammo.y,cammo.z, focusPos.x,focusPos.y,focusPos.z)
-		if dist > camdist
-			local adjust = dist - camdist
-			local moveVec = Vec3.SphereToCartesian(ha,va) * adjust
-			moveVec:ToMobjPos(cammo, false, false)
+		if (focusPos.z > me.floorz)
+			local dist = R_PointTo3DDist(cammo.x,cammo.y,cammo.z, focusPos.x,focusPos.y,focusPos.z)
+			if dist > camdist
+				local adjust = dist - camdist
+				local moveVec = Vec3.SphereToCartesian(ha,va) * adjust
+				moveVec:ToMobjPos(cammo, false, false)
+			else
+				local adjust = (dist - camdist) / 5
+				local moveVec = Vec3.SphereToCartesian(ha,va) * adjust
+				moveVec:ToMobjPos(cammo, false, false)
+			end
 		end
 	end
 	
