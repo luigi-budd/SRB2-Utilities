@@ -1,4 +1,4 @@
-local MYVERSION = 101
+local MYVERSION = 103
 local ADDHOOK = true
 if rawget(_G, "ExactoCam_Version")
 	if ExactoCam_Version == MYVERSION then return end
@@ -325,16 +325,42 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 			local angletome = R_PointToAngle2(found.x,found.y, me.x,me.y)
 			local angdiff = AngleFixed(angletome - ANGLETURN)
 			
-			if abs(intersect.x - found.x) <= found.radius + radius
+			/*
+			local linesintersect = false
+			if (found.frame & FF_PAPERSPRITE or found.renderflags & RF_PAPERSPRITE)
+				local a = found.angle
+				local mstart = Vec3.New(
+					found.x - FixedMul(found.radius, cos(a)),
+					found.y - FixedMul(found.radius, sin(a)),
+					found.z
+				)
+				local mend = Vec3.New(
+					found.x + FixedMul(found.radius, cos(a)),
+					found.y + FixedMul(found.radius, sin(a)),
+					found.z
+				)
+				local mint = P_ClosestPointOnLine3D(intersect, mstart, mend)
+				linesintersect = (mint.x == intersect.x) and (mint.y == intersect.y)
+			end
+			*/
+			
+			if (abs(intersect.x - found.x) <= found.radius + radius
 			and abs(intersect.y - found.y) <= found.radius + radius
 			and (
 				found.z <= intersect.z + height -- check overhead
 				and found.z+found.height*3/2 >= intersect.z -- check underhead
-			)
+			))
 			and (
 				(angdiff <= 28*FU or angdiff >= (360 - 28)*FU)
 				or R_PointToDist2(adjustVec.x,adjustVec.y, found.x,found.y) <= 64*me.scale
 			)
+			--or linesintersect
+			or (abs(focusPos.x - found.x) <= found.radius + radius
+			and abs(focusPos.y - found.y) <= found.radius + radius
+			and (
+				found.z <= focusPos.z + height -- check overhead
+				and found.z+found.height*3/2 >= focusPos.z -- check underhead
+			))
 				obscuring = true
 			end
 			
