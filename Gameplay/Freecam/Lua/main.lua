@@ -551,8 +551,8 @@ addHook("PostThinkFrame",do
 		cam.momx,cam.momy,cam.momz = 0,0,0
 	end
 	
-	local f_in = (cmd.buttons & BT_WEAPONNEXT) or (mouse.buttons & MB_SCROLLUP)
-	local f_out = (cmd.buttons & BT_WEAPONPREV) or (mouse.buttons & MB_SCROLLDOWN)
+	local f_in = (mouse.buttons & MB_SCROLLUP)
+	local f_out = (mouse.buttons & MB_SCROLLDOWN)
 	if not vars.frozen
 	and not chatactive
 		if f_in
