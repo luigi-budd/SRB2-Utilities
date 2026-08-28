@@ -4,9 +4,9 @@ if rawget(_G, "ExactoCam_Version")
 	if ExactoCam_Version == MYVERSION then return end
 	
 	ADDHOOK = (ExactoCam_Version < MYVERSION)
+	if not ADDHOOK then return end
 end
 rawset(_G,"ExactoCam_Version", MYVERSION)
-
 local TR = TICRATE
 
 local function P_ClosestPointOnLine3D(p, lstart, lend)
@@ -309,6 +309,9 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 		adjustVec = $ + sideVec
 	end
 	*/
+	
+	local updateangles = true
+	
 	-- invisicam
 	if (p.playerstate == PST_LIVE)
 		Vec3.ToMobjPos(adjustVec + shiftVec, cammo, true, false)
@@ -446,9 +449,13 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 	end
 	
 	-- P_TeleportCameraMove(camera, cammo.x, cammo.y, cammo.z)
-	cammo.angle = ANGLETURN2
+	if updateangles
+		cammo.angle = ANGLETURN2
+	end
 	if camera.chase and not freecam_active
-		p.awayviewaiming = AIMING
+		if updateangles
+			p.awayviewaiming = AIMING
+		end
 		p.awayviewmobj = cammo
 		p.awayviewtics = 2
 	elseif p.awayviewmobj == cammo
