@@ -1,4 +1,4 @@
-local MYVERSION = 103
+local MYVERSION = 104
 local ADDHOOK = true
 if rawget(_G, "ExactoCam_Version")
 	if ExactoCam_Version == MYVERSION then return end
@@ -28,6 +28,32 @@ local function P_ClosestPointOnLine3D(p, lstart, lend)
 	n = $ * t
 	return Vec3.Add(lstart, n)
 end
+
+local function SafeVecPos(v, mo, absolute)
+	local destx = v.x
+	local desty = v.y
+	local destz = v.z
+	if not absolute then
+		destx = $ + mo.x
+		desty = $ + mo.y
+		destz = $ + mo.z
+	end
+	
+	local oldmz = mo.momz
+	mo.momz = destz - mo.z
+	P_ZMovement(mo)
+	if (mo.momz ~= destz - mo.z) and false
+		mo.momz = oldmz; return false;
+	end
+	mo.momz = oldmz
+	
+	if not P_TryMove(mo, destx, desty, true)
+		return false
+	end
+	
+	return true
+end
+
 local cammo = nil
 
 local ANGLETURN = 0
@@ -78,8 +104,8 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 		cammo = P_SpawnMobjFromMobj(me, 0,0,0, MT_RAY)
 		cammo.fuse = -1
 		cammo.tics = -1
-		cammo.height = camera.height
-		cammo.radius = camera.radius
+		cammo.height = camera.height / 2
+		cammo.radius = camera.radius / 2
 		cammo.flags = $|MF_NOCLIP|MF_NOCLIPHEIGHT|MF_NOSECTOR|MF_NOBLOCKMAP|MF_NOGRAVITY|MF_NOTHINK
 	end
 	cammo.height = camera.height
@@ -168,6 +194,7 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 	local adjustVec = Vec3.SphereToCartesian(ANGLETURN, AIMING) * (-camdist)
 	adjustVec = focusPos + adjustVec
 	-- clipping / poppercam
+	cammo.flags = ($ &~(MF_NOCLIP|MF_NOCLIPHEIGHT))|(me.flags & (MF_NOCLIP|MF_NOCLIPHEIGHT))
 	if not (me.flags & (MF_NOCLIP|MF_NOCLIPHEIGHT) or p.powers[pw_carry] == CR_NIGHTSMODE or twod)
 		local camSec = R_PointInSubsector(adjustVec.x,adjustVec.y).sector
 		if camSec.camsec
@@ -224,6 +251,7 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 		*/
 		
 		--if abs(bound - adjustVec.z) >= camdist/2
+		-- TODO: replace this bs with a stepper. UGH!
 		if (adjustVec.z < botZ)
 		or (adjustVec.z > topZ)
 		or (R_PointInSubsectorOrNil(adjustVec.x,adjustVec.y) == nil)
@@ -257,6 +285,22 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 				movewasblocked = true
 			end
 		end
+		
+		--[[
+		local steps = 320
+		local offsetVec = ((adjustVec + shiftVec) - focusPos) / (steps*FU)
+		for i = steps/5, steps
+			local t = P_SpawnMobjFromMobj(cammo, 0,0,0, MT_THOK)
+			t.scale = $ / 8
+			t.tics = 2
+			t.fuse = 2
+			
+			if not SafeVecPos(focusPos + (offsetVec*(i*FU)), cammo, true)
+				print("broke", i, steps/5)
+				break
+			end
+		end
+		]]
 	end
 	/*
 	if sidefrac
@@ -376,8 +420,17 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 	else
 		local ha,va = R_PointTo3DAngles(cammo.x,cammo.y,cammo.z, focusPos.x,focusPos.y,focusPos.z)
 		ANGLETURN2 = ha
-		AIMING = va
 		
+		local aim = AngleFixed(va)
+		if aim > 180*FU then aim = -(360*FU - $); end
+		if aim > 50*FU and aim < 180*FU
+			aim = 50*FU
+		elseif aim < -50*FU
+			aim = -50*FU
+		end
+		AIMING = FixedAngle(aim)
+		
+		camdist = $ * 3/2
 		if (focusPos.z > me.floorz)
 			local dist = R_PointTo3DDist(cammo.x,cammo.y,cammo.z, focusPos.x,focusPos.y,focusPos.z)
 			if dist > camdist
