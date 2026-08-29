@@ -1,10 +1,7 @@
-local MYVERSION = 104
-local ADDHOOK = true
+local MYVERSION = 106
 if rawget(_G, "ExactoCam_Version")
 	if ExactoCam_Version == MYVERSION then return end
-	
-	ADDHOOK = (ExactoCam_Version < MYVERSION)
-	if not ADDHOOK then return end
+	if (ExactoCam_Version > MYVERSION) then return end
 end
 rawset(_G,"ExactoCam_Version", MYVERSION)
 local TR = TICRATE
@@ -88,6 +85,8 @@ local twodanim = 0
 local blockingmobjs = {}
 local movewasblocked = false
 rawset(_G, "ExactoCam_Thinker", function(p, camera)
+	if ExactoCam_Version > MYVERSION then return end
+	
 	--if leveltime == 0 then return end
 	if not (p and p.valid) then return end
 	local me = p.realmo
@@ -463,9 +462,7 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 	end
 end)
 
-if ADDHOOK
-	addHook("PostThinkFrame",do
-		if (gamestate ~= GS_LEVEL) then return end
-		ExactoCam_Thinker(displayplayer, camera)
-	end)
-end
+addHook("PostThinkFrame",do
+	if (gamestate ~= GS_LEVEL) then return end
+	ExactoCam_Thinker(displayplayer, camera)
+end)
