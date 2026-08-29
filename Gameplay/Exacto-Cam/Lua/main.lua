@@ -464,5 +464,6 @@ end)
 
 addHook("PostThinkFrame",do
 	if (gamestate ~= GS_LEVEL) then return end
+	if (ExactoCam_Version > MYVERSION) then return end
 	ExactoCam_Thinker(displayplayer, camera)
 end)
