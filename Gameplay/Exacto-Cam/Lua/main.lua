@@ -1,4 +1,4 @@
-local MYVERSION = 106
+local MYVERSION = 107
 if rawget(_G, "ExactoCam_Version")
 	if ExactoCam_Version == MYVERSION then return end
 	if (ExactoCam_Version > MYVERSION) then return end
@@ -85,6 +85,31 @@ local twodanim = 0
 local blockingmobjs = {}
 local movewasblocked = false
 local blockingfrac = FU
+
+local zoomfrac = FU
+local ZOOM_ADJ = FU / 5
+local ZOOM_MIN = FU / 10
+local ZOOM_MAX = 5*FU
+
+local ctrldown = false
+local lastmouseflags = 0
+addHook("KeyDown",function(ev)
+	if isdedicatedserver then return end
+	if (ExactoCam_Version > MYVERSION) then return end
+	
+	if ev.name == "lctrl" or ev.name == "rctrl"
+		ctrldown = true
+	end
+end)
+addHook("KeyUp",function(ev)
+	if isdedicatedserver then return end
+	if (ExactoCam_Version > MYVERSION) then return end
+	
+	if ev.name == "lctrl" or ev.name == "rctrl"
+		ctrldown = false
+	end
+end)
+
 rawset(_G, "ExactoCam_Thinker", function(p, camera)
 	if ExactoCam_Version > MYVERSION then return end
 	
@@ -92,6 +117,7 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 	if not (p and p.valid) then return end
 	local me = p.realmo
 	if not (me and me.valid) then return end
+	if (p.spectator) then return end
 	
 	if (p.awayviewtics > 0)
 	and (p.awayviewmobj ~= cammo)
@@ -117,25 +143,34 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 		AIMING = p.cmd.aiming << 16
 	end
 	
-	/*
-	local aim = AngleFixed(AIMING)
-	if aim > 180*FU then aim = -(360*FU - $); end
-	if aim > 80*FU and aim < 180*FU
-		aim = 80*FU
-	elseif aim < -80*FU
-		aim = -80*FU
+	if ctrldown
+		if (mouse.buttons & MB_SCROLLUP) --and (lastmouseflags & MB_SCROLLUP == 0))
+			zoomfrac = $ - ZOOM_ADJ
+		end
+		if (mouse.buttons & MB_SCROLLDOWN) --and (lastmouseflags & MB_SCROLLDOWN == 0))
+			zoomfrac = $ + ZOOM_ADJ
+		end
+		if (mouse.buttons & MB_BUTTON3) -- wheel down
+			zoomfrac = FU
+		end
+		
+		if zoomfrac > ZOOM_MAX
+			zoomfrac = ZOOM_MAX
+		elseif zoomfrac < ZOOM_MIN
+			zoomfrac = ZOOM_MIN
+		end
 	end
-	AIMING = FixedAngle(aim)
-	*/
+	lastmouseflags = mouse.buttons
 	
 	local camflip = P_MobjFlip(me)
 	
 	local camdist = FixedMul(cv_camdist.value, me.scale)
 	camdist = FixedMul($, p.camerascale)
-	camdist = FixedMul($, blockingfrac)
+	camdist = FixedMul($, FixedMul(blockingfrac, zoomfrac))
 	blockingfrac = P_Lerp(FU/10, $, FU)
 	camdist = $ + (20*FU - 20*me.scale)
 	local camheight = FixedMul(cv_camheight.value, me.scale)
+	camheight = FixedMul($, FixedMul(blockingfrac, zoomfrac))
 	camheight = $ - (16*FU - 16*me.scale)
 	
 	local focusPos = Vec3.MobjPosToVec(me)
