@@ -1,4 +1,4 @@
-local MYVERSION = 107
+local MYVERSION = 108
 if rawget(_G, "ExactoCam_Version")
 	if ExactoCam_Version == MYVERSION then return end
 	if (ExactoCam_Version > MYVERSION) then return end
@@ -92,13 +92,35 @@ local ZOOM_MIN = FU / 10
 local ZOOM_MAX = 5*FU
 
 local ctrldown = false
-local lastmouseflags = 0
 addHook("KeyDown",function(ev)
 	if isdedicatedserver then return end
 	if (ExactoCam_Version > MYVERSION) then return end
 	
 	if ev.name == "lctrl" or ev.name == "rctrl"
 		ctrldown = true
+	end
+
+	if ctrldown
+		local eat = false
+		if ev.name == "wheel 1 up"
+			zoomfrac = $ - ZOOM_ADJ
+			eat = true
+		end
+		if ev.name == "wheel 1 down"
+			zoomfrac = $ + ZOOM_ADJ
+			eat = true
+		end
+		if ev.name == "mouse3"
+			zoomfrac = FU
+			eat = true
+		end
+		
+		if zoomfrac > ZOOM_MAX
+			zoomfrac = ZOOM_MAX
+		elseif zoomfrac < ZOOM_MIN
+			zoomfrac = ZOOM_MIN
+		end
+		if eat then return true; end
 	end
 end)
 addHook("KeyUp",function(ev)
@@ -142,25 +164,6 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 		ANGLETURN2 = ANGLETURN
 		AIMING = p.cmd.aiming << 16
 	end
-	
-	if ctrldown
-		if (mouse.buttons & MB_SCROLLUP) --and (lastmouseflags & MB_SCROLLUP == 0))
-			zoomfrac = $ - ZOOM_ADJ
-		end
-		if (mouse.buttons & MB_SCROLLDOWN) --and (lastmouseflags & MB_SCROLLDOWN == 0))
-			zoomfrac = $ + ZOOM_ADJ
-		end
-		if (mouse.buttons & MB_BUTTON3) -- wheel down
-			zoomfrac = FU
-		end
-		
-		if zoomfrac > ZOOM_MAX
-			zoomfrac = ZOOM_MAX
-		elseif zoomfrac < ZOOM_MIN
-			zoomfrac = ZOOM_MIN
-		end
-	end
-	lastmouseflags = mouse.buttons
 	
 	local camflip = P_MobjFlip(me)
 	
