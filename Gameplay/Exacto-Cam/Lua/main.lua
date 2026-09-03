@@ -84,6 +84,7 @@ local idletime = 0
 local twodanim = 0
 local blockingmobjs = {}
 local movewasblocked = false
+local blockingfrac = FU
 rawset(_G, "ExactoCam_Thinker", function(p, camera)
 	if ExactoCam_Version > MYVERSION then return end
 	
@@ -103,12 +104,12 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 		cammo = P_SpawnMobjFromMobj(me, 0,0,0, MT_RAY)
 		cammo.fuse = -1
 		cammo.tics = -1
-		cammo.height = camera.height / 2
-		cammo.radius = camera.radius / 2
+		cammo.height = 2 * FU
+		cammo.radius = FU
 		cammo.flags = $|MF_NOCLIP|MF_NOCLIPHEIGHT|MF_NOSECTOR|MF_NOBLOCKMAP|MF_NOGRAVITY|MF_NOTHINK
 	end
-	cammo.height = camera.height
-	cammo.radius = camera.radius
+	cammo.height = 2 * me.scale
+	cammo.radius = me.scale
 	
 	if p ~= consoleplayer
 		ANGLETURN = p.cmd.angleturn << 16
@@ -131,6 +132,8 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 	
 	local camdist = FixedMul(cv_camdist.value, me.scale)
 	camdist = FixedMul($, p.camerascale)
+	camdist = FixedMul($, blockingfrac)
+	blockingfrac = P_Lerp(FU/10, $, FU)
 	camdist = $ + (20*FU - 20*me.scale)
 	local camheight = FixedMul(cv_camheight.value, me.scale)
 	camheight = $ - (16*FU - 16*me.scale)
@@ -249,57 +252,20 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 		print(("%f"):format(topZ))
 		*/
 		
-		--if abs(bound - adjustVec.z) >= camdist/2
-		-- TODO: replace this bs with a stepper. UGH!
-		if (adjustVec.z < botZ)
-		or (adjustVec.z > topZ)
-		or (R_PointInSubsectorOrNil(adjustVec.x,adjustVec.y) == nil)
-			local ray = P_SpawnMobjFromMobj(me,
-				0,0,0, MT_RAY)
-			ray.height = 4*FU
-			ray.radius = 2*FU
-			ray.flags = MF_SLIDEME|MF_NOCLIPTHING
-			Vec3.ToMobjMom(Vec3.SphereToCartesian(ANGLETURN,0) * (-camdist), ray, false)
-			P_RailThinker(ray)
-			local olddist = camdist
-			camdist = R_PointToDist2(me.x,me.y, ray.x,ray.y)
-			
-			adjustVec = Vec3.SphereToCartesian(ANGLETURN, AIMING) * (-camdist)
-			adjustVec = focusPos + adjustVec
-			-- not in a wall?
-			if abs(olddist - camdist) < FU
-				local newdist = R_PointTo3DDist(
-					adjustVec.x,adjustVec.y,bound,
-					focusPos.x,focusPos.y,focusPos.z
-				)
-				
-				adjustVec = Vec3.SphereToCartesian(ANGLETURN, AIMING) * (-newdist)
-				adjustVec = focusPos + adjustVec
-				adjustVec.z = bound
-				movewasblocked = true
-				--print("not wall")
-				--print(("%f"):format(adjustVec.z))
-			elseif adjustVec.z < me.z
-				adjustVec.z = me.z
-				movewasblocked = true
-			end
-		end
-		
-		--[[
+		focusPos:ToMobjPos(cammo, true, false)
 		local steps = 320
 		local offsetVec = ((adjustVec + shiftVec) - focusPos) / (steps*FU)
-		for i = steps/5, steps
-			local t = P_SpawnMobjFromMobj(cammo, 0,0,0, MT_THOK)
-			t.scale = $ / 8
-			t.tics = 2
-			t.fuse = 2
-			
-			if not SafeVecPos(focusPos + (offsetVec*(i*FU)), cammo, true)
-				print("broke", i, steps/5)
+		for i = 0, steps
+			local destPos = focusPos + (offsetVec*(i*FU))
+			if not SafeVecPos(destPos, cammo, true)
+				cammo.momx = (destPos.x) - cammo.x
+				cammo.momy = (destPos.y) - cammo.y
+				P_SlideMove(cammo)
+				cammo.momx,cammo.momy = 0,0
+				blockingfrac = min($, FixedDiv(i*FU, steps*FU))
 				break
 			end
 		end
-		]]
 	end
 	/*
 	if sidefrac
@@ -313,7 +279,7 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 	
 	-- invisicam
 	if (p.playerstate == PST_LIVE)
-		Vec3.ToMobjPos(adjustVec + shiftVec, cammo, true, false)
+		-- Vec3.ToMobjPos(adjustVec + shiftVec, cammo, true, false)
 		
 		local checkplayers = (gametyperules & GTR_FRIENDLY) == 0
 		local ray = P_SpawnMobjFromMobj(cammo,
