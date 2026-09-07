@@ -1,4 +1,4 @@
-local MYVERSION = 108
+local MYVERSION = 110
 if rawget(_G, "ExactoCam_Version")
 	if ExactoCam_Version == MYVERSION then return end
 	if (ExactoCam_Version > MYVERSION) then return end
@@ -13,6 +13,7 @@ local function P_ClosestPointOnLine3D(p, lstart, lend)
 	
 	-- d = R_PointToDist2(0, lend.z, R_PointToDist2(lend.x, lend.y, lstart.x, lstart.y), lstart.z)
 	d = R_PointTo3DDist(lstart.x,lstart.y,lstart.z, lend.x,lend.y,lend.z)
+	if d == 0 then return lstart; end
 	local n = Vec3.New(V.x, V.y, V.z) / d
 	t = Vec3.Dot(n, c)
 	
@@ -84,12 +85,11 @@ local idletime = 0
 local twodanim = 0
 local blockingmobjs = {}
 local movewasblocked = false
-local blockingfrac = FU
 
 local zoomfrac = FU
 local ZOOM_ADJ = FU / 5
 local ZOOM_MIN = FU / 10
-local ZOOM_MAX = 5*FU
+local ZOOM_MAX = 8*FU
 
 local ctrldown = false
 addHook("KeyDown",function(ev)
@@ -169,11 +169,10 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 	
 	local camdist = FixedMul(cv_camdist.value, me.scale)
 	camdist = FixedMul($, p.camerascale)
-	camdist = FixedMul($, FixedMul(blockingfrac, zoomfrac))
-	blockingfrac = P_Lerp(FU/10, $, FU)
+	camdist = FixedMul($, zoomfrac)
 	camdist = $ + (20*FU - 20*me.scale)
 	local camheight = FixedMul(cv_camheight.value, me.scale)
-	camheight = FixedMul($, FixedMul(blockingfrac, zoomfrac))
+	camheight = FixedMul($, zoomfrac)
 	camheight = $ - (16*FU - 16*me.scale)
 	
 	local focusPos = Vec3.MobjPosToVec(me)
@@ -236,6 +235,7 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 	-- clipping / poppercam
 	cammo.flags = ($ &~(MF_NOCLIP|MF_NOCLIPHEIGHT))|(me.flags & (MF_NOCLIP|MF_NOCLIPHEIGHT))
 	if not (me.flags & (MF_NOCLIP|MF_NOCLIPHEIGHT) or p.powers[pw_carry] == CR_NIGHTSMODE or twod)
+	and (p.playerstate == PST_LIVE)
 		local camSec = R_PointInSubsector(adjustVec.x,adjustVec.y).sector
 		if camSec.camsec
 			camSec = camSec.camsec -- lol
@@ -299,11 +299,14 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 				cammo.momx = (destPos.x) - cammo.x
 				cammo.momy = (destPos.y) - cammo.y
 				P_SlideMove(cammo)
-				cammo.momx,cammo.momy = 0,0
-				blockingfrac = min($, FixedDiv(i*FU, steps*FU))
+				cammo.momx,cammo.momy,cammo.momz = 0,0,0
+				movewasblocked = true
 				break
 			end
 		end
+	elseif (p.playerstate == PST_LIVE)
+		local destPos = (adjustVec + shiftVec)
+		destPos:ToMobjPos(cammo, true, false)
 	end
 	/*
 	if sidefrac
