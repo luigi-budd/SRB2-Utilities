@@ -143,6 +143,9 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 	
 	if (p.awayviewtics > 0)
 	and (p.awayviewmobj ~= cammo)
+		if (p.awayviewaiming == AIMING)
+			p.awayviewaiming = 0
+		end
 		return
 	end
 	
