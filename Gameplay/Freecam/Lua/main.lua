@@ -790,29 +790,36 @@ COM_AddCommand("freecam",function(p)
 		
 		if not (freecam_mo and freecam_mo.valid)
 			freecam_mo = P_SpawnMobjFromMobj(p.realmo, 0,0,0, MT_RAY)
-			freecam_mo.height = camera.height
-			freecam_mo.radius = camera.radius
-			P_SetOrigin(freecam_mo, camera.x,camera.y,camera.z - 41*freecam_mo.height/48)
+			local cam = camera
+			local aiming = cam.aiming
+			if (p.awayviewtics and p.awayviewmobj and p.awayviewmobj.valid)
+				cam = p.awayviewmobj
+				aiming = p.awayviewaiming
+			end
+			freecam_mo.height = cam.height
+			freecam_mo.radius = cam.radius
+			P_SetOrigin(freecam_mo, cam.x,cam.y,cam.z - 41*freecam_mo.height/48)
 			
 			freecam_mo.tics = -1
 			freecam_mo.fuse = -1
 			freecam_mo.flags2 = $|MF2_DONTDRAW|(p.realmo.flags2 & MF2_OBJECTFLIP)
 			freecam_mo.flags = MF_NOCLIPTHING|MF_NOCLIP|MF_NOCLIPHEIGHT|MF_NOGRAVITY|MF_NOTHINK|MF_SLIDEME
 			
-			freecam_mo.angle = camera.angle
-			freecam_mo.aiming = camera.aiming
+			freecam_mo.angle = cam.angle
+			freecam_mo.aiming = aiming
 			freecam_mo.tracer = p.realmo
 			
-			freecam_mo.momx = camera.momx
-			freecam_mo.momy = camera.momy
-			freecam_mo.momz = camera.momz
+			freecam_mo.momx = cam.momx
+			freecam_mo.momy = cam.momy
+			freecam_mo.momz = cam.momz
 			
-			freecam_cmd.angleturn = camera.angle >> 16
-			freecam_cmd.aiming = camera.aiming >> 16
+			freecam_cmd.angleturn = cam.angle >> 16
+			freecam_cmd.aiming = aiming >> 16
 			camera.chase = true
 		end
 		freecam_active = true
 		
+		/*
 		freecam_vars.fov = 0
 		freecam_vars.fov_fixed = 0
 		
@@ -827,6 +834,16 @@ COM_AddCommand("freecam",function(p)
 		freecam_vars.speed = 12*FU
 		freecam_vars.friction = FU * 85/100
 		freecam_vars.panfric = FU
+		*/
 		freecam_vars.playerlock = nil
 	end
+end,COM_LOCAL)
+
+COM_AddCommand("warptofreecam",function(p)
+	if not freecam_active then return end
+	
+	COM_BufInsertText(p, string.format(
+		"sd_warp %.2f %.2f %.2f",
+		freecam_mo.x, freecam_mo.y, freecam_mo.z
+	))
 end,COM_LOCAL)
