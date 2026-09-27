@@ -159,8 +159,8 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 		cammo.radius = FU
 		cammo.flags = $|MF_NOCLIP|MF_NOCLIPHEIGHT|MF_NOSECTOR|MF_NOBLOCKMAP|MF_NOGRAVITY|MF_NOTHINK
 	end
-	cammo.height = 2 * me.scale
-	cammo.radius = me.scale
+	cammo.height = 16 * me.scale
+	cammo.radius = 4 * me.scale
 	
 	if p ~= consoleplayer
 		ANGLETURN = p.cmd.angleturn << 16
@@ -222,6 +222,9 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 		if me.momz * P_MobjFlip(me) < 0
 			shiftVec.z = $ + me.momz
 		end
+		
+		shiftVec.z = $ + FixedMul(camdist / 2, sin(AIMING))
+		AIMING = 0
 	else
 		twodanim = P_Lerp(FU/3, $, 0)
 		sidefrac = P_Lerp(FU/2, $, 0)
@@ -284,7 +287,6 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 		
 		-- wtopZ = $ - cammo.height*6
 		--botZ = $ - 10*FU
-		local bound = clamp(botZ, adjustVec.z, topZ)
 		/*
 		P_SpawnMobj(me.x,me.y,topZ, MT_THOK)
 		P_SpawnMobj(me.x,me.y,botZ, MT_THOK).color = SKINCOLOR_RED
@@ -307,6 +309,7 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 				break
 			end
 		end
+		-- cammo.z = clamp(botZ, $, topZ - 20*FU)
 	elseif (p.playerstate == PST_LIVE)
 		local destPos = (adjustVec + shiftVec)
 		destPos:ToMobjPos(cammo, true, false)
