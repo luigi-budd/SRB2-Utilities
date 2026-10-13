@@ -193,7 +193,6 @@ local function checkbuttons(ev, keydown)
 	
 	if key == "lctrl"
 		btn.ctrlmod = (keydown) and 1 or 0
-		eat = true
 	end
 	
 	return eat
