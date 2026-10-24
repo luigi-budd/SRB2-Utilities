@@ -1,4 +1,4 @@
-local MYVERSION = 110
+local MYVERSION = 111
 if rawget(_G, "ExactoCam_Version")
 	if ExactoCam_Version == MYVERSION then return end
 	if (ExactoCam_Version > MYVERSION) then return end
@@ -155,8 +155,6 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 		cammo = P_SpawnMobjFromMobj(me, 0,0,0, MT_RAY)
 		cammo.fuse = -1
 		cammo.tics = -1
-		cammo.height = 2 * FU
-		cammo.radius = FU
 		cammo.flags = $|MF_NOCLIP|MF_NOCLIPHEIGHT|MF_NOSECTOR|MF_NOBLOCKMAP|MF_NOGRAVITY|MF_NOTHINK
 	end
 	cammo.height = 16 * me.scale
@@ -179,7 +177,14 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 	camheight = $ - (16*FU - 16*me.scale)
 	
 	local focusPos = Vec3.MobjPosToVec(me)
-	focusPos.z = $ + ((41*P_GetPlayerHeight(p)/48) + camheight)*camflip
+	if camflip == 1
+		focusPos.z = $ + ((41*P_GetPlayerHeight(p)/48) + camheight)
+	else
+		-- 20fu because srb2 offsets awayview z by that much for some reason
+		-- times 2 because..?????!?!?!?!?!!!!!?!?!?
+		focusPos.z = ($ + me.height) - 40*FU
+		focusPos.z = $ - ((41*P_GetPlayerHeight(p)/48)) - camheight
+	end
 	
 	local shiftVec = Vec3.New(0,0,0)
 	
@@ -242,6 +247,7 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 	cammo.flags = ($ &~(MF_NOCLIP|MF_NOCLIPHEIGHT))|(me.flags & (MF_NOCLIP|MF_NOCLIPHEIGHT))
 	if not (me.flags & (MF_NOCLIP|MF_NOCLIPHEIGHT) or p.powers[pw_carry] == CR_NIGHTSMODE or twod)
 	and (p.playerstate == PST_LIVE)
+		/*
 		local camSec = R_PointInSubsector(adjustVec.x,adjustVec.y).sector
 		if camSec.camsec
 			camSec = camSec.camsec -- lol
@@ -284,6 +290,7 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 				topZ = fBotZ
 			end
 		end
+		*/
 		
 		-- wtopZ = $ - cammo.height*6
 		--botZ = $ - 10*FU
@@ -354,6 +361,7 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 				if (blockingmobjs[found]) then return end
 				if (found.type == MT_PLAYER and not checkplayers) then return end
 				if (found.flags & (MF_SOLID|MF_SCENERY|MF_NOTHINK) == 0) then return end
+				if (found.hitlag) then return end
 				/*
 				print(found.info.typename,
 					found.flags & MF_SOLID == MF_SOLID,
