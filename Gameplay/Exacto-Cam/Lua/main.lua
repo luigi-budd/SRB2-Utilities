@@ -1,4 +1,4 @@
-local MYVERSION = 111
+local MYVERSION = 112
 if rawget(_G, "ExactoCam_Version")
 	if ExactoCam_Version == MYVERSION then return end
 	if (ExactoCam_Version > MYVERSION) then return end
@@ -14,7 +14,7 @@ local function P_ClosestPointOnLine3D(p, lstart, lend)
 	-- d = R_PointToDist2(0, lend.z, R_PointToDist2(lend.x, lend.y, lstart.x, lstart.y), lstart.z)
 	d = R_PointTo3DDist(lstart.x,lstart.y,lstart.z, lend.x,lend.y,lend.z)
 	if d == 0 then return lstart; end
-	local n = Vec3.New(V.x, V.y, V.z) / d
+	local n = Vec3.Div(Vec3.New(V.x, V.y, V.z), d)
 	t = Vec3.Dot(n, c)
 	
 	if t <= 0
@@ -36,6 +36,7 @@ local function SafeVecPos(v, mo, absolute)
 		desty = $ + mo.y
 		destz = $ + mo.z
 	end
+	destz = clamp(mo.floorz + FU, $, mo.ceilingz - 30*FU)
 	
 	local oldmz = mo.momz
 	mo.momz = destz - mo.z
@@ -155,7 +156,8 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 		cammo = P_SpawnMobjFromMobj(me, 0,0,0, MT_RAY)
 		cammo.fuse = -1
 		cammo.tics = -1
-		cammo.flags = $|MF_NOCLIP|MF_NOCLIPHEIGHT|MF_NOSECTOR|MF_NOBLOCKMAP|MF_NOGRAVITY|MF_NOTHINK
+		cammo.flags = $|MF_NOCLIP|MF_NOCLIPHEIGHT|MF_NOGRAVITY|MF_NOSECTOR|MF_NOBLOCKMAP|MF_NOTHINK
+		cammo.exactocam = true
 	end
 	cammo.height = 16 * me.scale
 	cammo.radius = 4 * me.scale
@@ -223,7 +225,7 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 			end
 		end
 		
-		shiftVec = Vec3.New(camdist * 2/5, 0,0) * sidefrac
+		shiftVec = Vec3.Mul(Vec3.New(camdist * 2/5, 0,0), sidefrac)
 		if me.momz * P_MobjFlip(me) < 0
 			shiftVec.z = $ + me.momz
 		end
@@ -241,72 +243,21 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 	
 	movewasblocked = false
 	
-	local adjustVec = Vec3.SphereToCartesian(ANGLETURN, AIMING) * (-camdist)
-	adjustVec = focusPos + adjustVec
+	local adjustVec = Vec3.Mul(Vec3.SphereToCartesian(ANGLETURN, AIMING), (-camdist))
+	adjustVec = Vec3.Add(focusPos, adjustVec)
+	
 	-- clipping / poppercam
 	cammo.flags = ($ &~(MF_NOCLIP|MF_NOCLIPHEIGHT))|(me.flags & (MF_NOCLIP|MF_NOCLIPHEIGHT))
 	if not (me.flags & (MF_NOCLIP|MF_NOCLIPHEIGHT) or p.powers[pw_carry] == CR_NIGHTSMODE or twod)
 	and (p.playerstate == PST_LIVE)
-		/*
-		local camSec = R_PointInSubsector(adjustVec.x,adjustVec.y).sector
-		if camSec.camsec
-			camSec = camSec.camsec -- lol
-		elseif camSec.heightsec
-			camSec = camSec.heightsec
-		end
-		
-		local topZ = camSec.ceilingheight
-		local botZ = camSec.floorheight
-		if (camSec.c_slope)
-			topZ = P_GetZAt(camSec.c_slope, adjustVec.x,adjustVec.y)
-		end
-		if (camSec.f_slope)
-			botZ = P_GetZAt(camSec.f_slope, adjustVec.x,adjustVec.y)
-		end
-		
-		local midZ = adjustVec.z + (adjustVec.z - focusPos.z)/2
-		local camTop = midZ + cammo.height
-		for rover in camSec.ffloors()
-			if not (rover.fofflags & FOF_BLOCKOTHERS) then continue end
-			if not (rover.fofflags & FOF_EXISTS) then continue end
-			if not (rover.fofflags & FOF_RENDERALL) then continue end
-			if (rover.master.frontsector.flags & MSF_NOCLIPCAMERA) then continue end
-			
-			local fTopZ = rover.topheight
-			local fBotZ = rover.bottomheight
-			if (rover.t_slope)
-				fTopZ = P_GetZAt(rover.t_slope, adjustVec.x,adjustVec.y)
-			end
-			if (rover.b_slope)
-				fBotZ = P_GetZAt(rover.b_slope, adjustVec.x,adjustVec.y)
-			end
-			
-			local delta1 = midZ - (fBotZ + ((fTopZ - fBotZ)/2))
-			local delta2 = camTop - (fBotZ + ((fTopZ - fBotZ)/2))
-			if (fTopZ > botZ and (abs(delta1) < abs(delta2)))
-				botZ = fTopZ
-			end
-			if (fBotZ < topZ and (abs(delta1) >= abs(delta2)))
-				topZ = fBotZ
-			end
-		end
-		*/
-		
-		-- wtopZ = $ - cammo.height*6
-		--botZ = $ - 10*FU
-		/*
-		P_SpawnMobj(me.x,me.y,topZ, MT_THOK)
-		P_SpawnMobj(me.x,me.y,botZ, MT_THOK).color = SKINCOLOR_RED
-		print(adjustVec.z > topZ)
-		print(("%f"):format(adjustVec.z))
-		print(("%f"):format(topZ))
-		*/
-		
 		focusPos:ToMobjPos(cammo, true, false)
 		local steps = 320
-		local offsetVec = ((adjustVec + shiftVec) - focusPos) / (steps*FU)
+		local offsetVec
+		offsetVec = Vec3.Sub(Vec3.Add(adjustVec, shiftVec), focusPos)
+		offsetVec = Vec3.Div(offsetVec, steps*FU)
+		
 		for i = 0, steps
-			local destPos = focusPos + (offsetVec*(i*FU))
+			local destPos = Vec3.Add(focusPos, Vec3.Mul(offsetVec, (i*FU)))
 			if not SafeVecPos(destPos, cammo, true)
 				cammo.momx = (destPos.x) - cammo.x
 				cammo.momy = (destPos.y) - cammo.y
@@ -316,32 +267,22 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 				break
 			end
 		end
-		-- cammo.z = clamp(botZ, $, topZ - 20*FU)
 	elseif (p.playerstate == PST_LIVE)
-		local destPos = (adjustVec + shiftVec)
+		local destPos = Vec3.Add(adjustVec, shiftVec)
 		destPos:ToMobjPos(cammo, true, false)
 	end
-	/*
-	if sidefrac
-		local sideVec = Vec3.SphereToCartesian(ANGLETURN+ANGLE_90, 0) * (-FixedMul(camdist, FixedSqrt(2*FU)/2))
-		sideVec = $ * sidefrac
-		adjustVec = $ + sideVec
-	end
-	*/
 	
 	local updateangles = true
 	
 	-- invisicam
 	if (p.playerstate == PST_LIVE)
-		-- Vec3.ToMobjPos(adjustVec + shiftVec, cammo, true, false)
-		
 		local checkplayers = (gametyperules & GTR_FRIENDLY) == 0
 		local ray = P_SpawnMobjFromMobj(cammo,
 			0,0,0, MT_RAY)
 		ray.height = 8*FU
 		ray.radius = 4*FU
 		ray.flags = $|MF_NOCLIPTHING|MF_NOCLIPHEIGHT|MF_NOCLIP
-		Vec3.ToMobjMom(Vec3.SphereToCartesian(ANGLETURN,AIMING) * (8*FU), ray, true)
+		Vec3.ToMobjMom(Vec3.Mul(Vec3.SphereToCartesian(ANGLETURN,AIMING), (8*FU)), ray, true)
 		
 		local blockrad = ray.radius + me.radius
 		for i = 0,255
@@ -362,13 +303,6 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 				if (found.type == MT_PLAYER and not checkplayers) then return end
 				if (found.flags & (MF_SOLID|MF_SCENERY|MF_NOTHINK) == 0) then return end
 				if (found.hitlag) then return end
-				/*
-				print(found.info.typename,
-					found.flags & MF_SOLID == MF_SOLID,
-					found.flags & MF_SCENERY == MF_SCENERY,
-					found.flags & MF_NOTHINK == MF_NOTHINK
-				)
-				*/
 				
 				if abs(ray.x - found.x) <= ray.radius + found.radius
 				and abs(ray.y - found.y) <= ray.radius + found.radius
@@ -458,11 +392,11 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 			local dist = R_PointTo3DDist(cammo.x,cammo.y,cammo.z, focusPos.x,focusPos.y,focusPos.z)
 			if dist > camdist
 				local adjust = dist - camdist
-				local moveVec = Vec3.SphereToCartesian(ha,va) * adjust
+				local moveVec = Vec3.Mul(Vec3.SphereToCartesian(ha,va), adjust)
 				moveVec:ToMobjPos(cammo, false, false)
 			else
 				local adjust = (dist - camdist) / 5
-				local moveVec = Vec3.SphereToCartesian(ha,va) * adjust
+				local moveVec = Vec3.Mul(Vec3.SphereToCartesian(ha,va), adjust)
 				moveVec:ToMobjPos(cammo, false, false)
 			end
 		end
@@ -470,8 +404,9 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 	
 	-- P_TeleportCameraMove(camera, cammo.x, cammo.y, cammo.z)
 	if updateangles
-		cammo.angle = ANGLETURN2
+		cammo.angle = ANGLETURN2 --+ ANG1*3/2
 	end
+	
 	if camera.chase and not freecam_active
 		if updateangles
 			p.awayviewaiming = AIMING
@@ -482,6 +417,15 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 		p.awayviewmobj = nil
 	end
 end)
+
+addHook("MobjLineCollide",function(ray, line)
+	if not ray.exactocam then return end
+	if not line then return end
+	
+	if (line.flags & (ML_IMPASSIBLE|ML_TWOSIDED) == (ML_IMPASSIBLE|ML_TWOSIDED))
+		return false
+	end
+end,MT_RAY)
 
 addHook("PostThinkFrame",do
 	if (gamestate ~= GS_LEVEL) then return end
