@@ -1,4 +1,4 @@
-local MYVERSION = 112
+local MYVERSION = 113
 if rawget(_G, "ExactoCam_Version")
 	if ExactoCam_Version == MYVERSION then return end
 	if (ExactoCam_Version > MYVERSION) then return end
@@ -41,7 +41,7 @@ local function SafeVecPos(v, mo, absolute)
 	local oldmz = mo.momz
 	mo.momz = destz - mo.z
 	P_ZMovement(mo)
-	if (mo.momz ~= destz - mo.z) and false
+	if (mo.z ~= destz)
 		mo.momz = oldmz; return false;
 	end
 	mo.momz = oldmz
@@ -55,7 +55,9 @@ end
 
 local cammo = nil
 
+-- ANGLETURN is the angle used when positioning the camera...
 local ANGLETURN = 0
+-- ...ANGLETURN2 is the angle the camera faces
 local ANGLETURN2 = 0
 local AIMING = 0
 addHook("PlayerCmd",function(p,cmd)
@@ -81,13 +83,17 @@ end)
 local cv_camdist = CV_FindVar("cam_dist")
 local cv_camheight = CV_FindVar("cam_height")
 local cv_camrotate = CV_FindVar("cam_rotate")
+local exitingzoom = FU
+
 local sidefrac = 0
 local idletime = 0
 local twodanim = 0
+
 local blockingmobjs = {}
 local movewasblocked = false
 
-local zoomfrac = FU
+local dest_zoomfrac = FU
+local zoomfrac = dest_zoomfrac
 local ZOOM_ADJ = FU / 5
 local ZOOM_MIN = FU / 10
 local ZOOM_MAX = 8*FU
@@ -104,22 +110,22 @@ addHook("KeyDown",function(ev)
 	if ctrldown
 		local eat = false
 		if ev.name == "wheel 1 up"
-			zoomfrac = $ - ZOOM_ADJ
+			dest_zoomfrac = $ - ZOOM_ADJ
 			eat = true
 		end
 		if ev.name == "wheel 1 down"
-			zoomfrac = $ + ZOOM_ADJ
+			dest_zoomfrac = $ + ZOOM_ADJ
 			eat = true
 		end
 		if ev.name == "mouse3"
-			zoomfrac = FU
+			dest_zoomfrac = FU
 			eat = true
 		end
 		
-		if zoomfrac > ZOOM_MAX
-			zoomfrac = ZOOM_MAX
-		elseif zoomfrac < ZOOM_MIN
-			zoomfrac = ZOOM_MIN
+		if dest_zoomfrac > ZOOM_MAX
+			dest_zoomfrac = ZOOM_MAX
+		elseif dest_zoomfrac < ZOOM_MIN
+			dest_zoomfrac = ZOOM_MIN
 		end
 		if eat then return true; end
 	end
@@ -167,17 +173,22 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 		ANGLETURN2 = ANGLETURN
 		AIMING = p.cmd.aiming << 16
 	end
+	ANGLETURN = $ + FixedAngle(cv_camrotate.value * FU)
+	
+	zoomfrac = P_Lerp(FU / 3, $, dest_zoomfrac)
 	
 	local camflip = P_MobjFlip(me)
-	
 	local camdist = FixedMul(cv_camdist.value, me.scale)
 	camdist = FixedMul($, p.camerascale)
 	camdist = FixedMul($, zoomfrac)
+	camdist = FixedMul($, exitingzoom)
 	camdist = $ + (20*FU - 20*me.scale)
+	
 	local camheight = FixedMul(cv_camheight.value, me.scale)
 	camheight = FixedMul($, zoomfrac)
 	camheight = $ - (16*FU - 16*me.scale)
 	
+	local shiftVec = Vec3.New(0,0,0)
 	local focusPos = Vec3.MobjPosToVec(me)
 	if camflip == 1
 		focusPos.z = $ + ((41*P_GetPlayerHeight(p)/48) + camheight)
@@ -187,8 +198,6 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 		focusPos.z = ($ + me.height) - 40*FU
 		focusPos.z = $ - ((41*P_GetPlayerHeight(p)/48)) - camheight
 	end
-	
-	local shiftVec = Vec3.New(0,0,0)
 	
 	local twod = (me.flags2 & MF2_TWOD or twodlevel)
 	if twod
@@ -251,7 +260,7 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 	if not (me.flags & (MF_NOCLIP|MF_NOCLIPHEIGHT) or p.powers[pw_carry] == CR_NIGHTSMODE or twod)
 	and (p.playerstate == PST_LIVE)
 		focusPos:ToMobjPos(cammo, true, false)
-		local steps = 320
+		local steps = 270
 		local offsetVec
 		offsetVec = Vec3.Sub(Vec3.Add(adjustVec, shiftVec), focusPos)
 		offsetVec = Vec3.Div(offsetVec, steps*FU)
@@ -402,11 +411,21 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 		end
 	end
 	
-	-- P_TeleportCameraMove(camera, cammo.x, cammo.y, cammo.z)
-	if updateangles
-		cammo.angle = ANGLETURN2 --+ ANG1*3/2
+	if (p.exiting)
+		exitingzoom = P_Lerp(FU/3, $, 2*FU)
+		if not (multiplayer or netgame)
+			updateangles = false
+		end
+	else
+		exitingzoom = FU
 	end
 	
+	-- done very last incase ANGLETURN2 was changed
+	ANGLETURN2 = $ + FixedAngle(cv_camrotate.value * FU)
+	
+	if updateangles
+		cammo.angle = ANGLETURN2
+	end
 	if camera.chase and not freecam_active
 		if updateangles
 			p.awayviewaiming = AIMING
@@ -422,7 +441,7 @@ addHook("MobjLineCollide",function(ray, line)
 	if not ray.exactocam then return end
 	if not line then return end
 	
-	if (line.flags & (ML_IMPASSIBLE|ML_TWOSIDED) == (ML_IMPASSIBLE|ML_TWOSIDED))
+	if (line.flags & (ML_IMPASSIBLE|ML_TWOSIDED|ML_BLOCKMONSTERS) == (ML_IMPASSIBLE|ML_TWOSIDED|ML_BLOCKMONSTERS))
 		return false
 	end
 end,MT_RAY)
