@@ -169,14 +169,6 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 	if not (me and me.valid) then return end
 	if (p.spectator) then return end
 	
-	print("THINK ---- "..leveltime,
-		cv_chasecam.value,
-		camerawasswitched,
-		(p.awayviewtics > 0),
-		(p.awayviewmobj ~= cammo),
-		(p.awayviewtics > 0) and (p.awayviewmobj ~= cammo)
-	)
-	
 	if not (cv_chasecam.value)
 		if p.awayviewmobj == cammo
 			p.awayviewmobj = nil
