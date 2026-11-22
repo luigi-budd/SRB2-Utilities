@@ -596,6 +596,13 @@ addHook("HUD",function(v)
 	local vars = freecam_vars
 	if (vars.hidehud) then return end
 	
+	if not v.dointerp
+		v.dointerp = function(tag)
+			if v.interpolate == nil then return end
+			v.interpolate(tag)
+		end
+	end
+	
 	local fovtotal = cv_fov.value
 	fovtotal = FixedDiv($ + vars.fov*FU, $)
 	
@@ -658,13 +665,13 @@ addHook("HUD",function(v)
 			for i = -7,7
 				if not i then continue end
 				local sign = (i < 0) and -1 or 1
-				v.interpolate(i)
+				v.dointerp(i)
 				v.drawScaled(
 					x + P_ReturnThrustX(nil, ang, step*i) + ox*sign,
  					y - P_ReturnThrustY(nil, ang, step*i) + oy*sign,
 					scale, v.cachePatch("FRCAM_BALL"), 0
 				)
-				v.interpolate(false)
+				v.dointerp(false)
 			end
 		end
 	end
@@ -681,13 +688,13 @@ addHook("HUD",function(v)
 		for i = 0,res
 			local frac = FixedDiv(i, res)
 			local ang = FixedAngle(-FixedMul(angle, frac) + 90*FU)
-			v.interpolate(i)
+			v.dointerp(i)
 			v.drawScaled(
 				x + FixedMul(rad, cos(ang)),
 				y - FixedMul(rad, sin(ang)),
 				scale, v.cachePatch("FRCAM_BALL"), 0
 			)
-			v.interpolate(false)
+			v.dointerp(false)
 		end
 	end
 	
