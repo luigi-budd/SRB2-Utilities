@@ -83,6 +83,7 @@ end)
 local cv_camdist = CV_FindVar("cam_dist")
 local cv_camheight = CV_FindVar("cam_height")
 local cv_camrotate = CV_FindVar("cam_rotate")
+local cv_chasecam = CV_FindVar("chasecam")
 local exitingzoom = FU
 
 local sidefrac = 0
@@ -139,18 +140,54 @@ addHook("KeyUp",function(ev)
 	end
 end)
 
+local camerawasswitched = false
+local VIEW_MAXANIM = 8
+local viewpointswitch = {
+	animation = 0,
+	startpoint = {x=0,y=0,z=0, ang=0,aim=0}
+}
+
+addHook("ViewpointSwitch",function(p, next, forced)
+	if (ExactoCam_Version > MYVERSION) then return end
+	
+	local nmo = next.realmo
+	if not (nmo and nmo.valid) then return end
+	
+	viewpointswitch.animation = VIEW_MAXANIM
+	viewpointswitch.startpoint.x = cammo.x
+	viewpointswitch.startpoint.y = cammo.y
+	viewpointswitch.startpoint.z = cammo.z
+	viewpointswitch.startpoint.ang = cammo.angle
+	viewpointswitch.startpoint.aim = cammo.aiming
+end)
+
 rawset(_G, "ExactoCam_Thinker", function(p, camera)
 	if ExactoCam_Version > MYVERSION then return end
 	
-	--if leveltime == 0 then return end
 	if not (p and p.valid) then return end
 	local me = p.realmo
 	if not (me and me.valid) then return end
 	if (p.spectator) then return end
 	
-	if (p.awayviewtics > 0)
-	and (p.awayviewmobj ~= cammo)
-		if (p.awayviewaiming == AIMING)
+	print("THINK ---- "..leveltime,
+		cv_chasecam.value,
+		camerawasswitched,
+		(p.awayviewtics > 0),
+		(p.awayviewmobj ~= cammo),
+		(p.awayviewtics > 0) and (p.awayviewmobj ~= cammo)
+	)
+	
+	if not (cv_chasecam.value)
+		if p.awayviewmobj == cammo
+			p.awayviewmobj = nil
+		end
+		return
+	end
+	
+	if ((p.awayviewtics > 0) and (p.awayviewmobj ~= cammo))
+	or (camerawasswitched)
+	-- or (p.awayviewtics == 0 and not cv_chasecam.value)
+		if (p.awayviewaiming == AIMING) and not (freecam_active)
 			p.awayviewaiming = 0
 		end
 		return
@@ -175,7 +212,7 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 	end
 	ANGLETURN = $ + FixedAngle(cv_camrotate.value * FU)
 	
-	zoomfrac = P_Lerp(FU / 3, $, dest_zoomfrac)
+	zoomfrac = P_Lerp(FU / 4, $, dest_zoomfrac)
 	
 	local camflip = P_MobjFlip(me)
 	local camdist = FixedMul(cv_camdist.value, me.scale)
@@ -279,6 +316,24 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 	elseif (p.playerstate == PST_LIVE)
 		local destPos = Vec3.Add(adjustVec, shiftVec)
 		destPos:ToMobjPos(cammo, true, false)
+	end
+	
+	if (viewpointswitch.animation)
+		local frac = FU - FixedDiv(viewpointswitch.animation*FU, VIEW_MAXANIM*FU)
+		frac = ease.inoutquad(frac, 0, FU)
+		
+		ANGLETURN2 = P_Lerp(frac, viewpointswitch.startpoint.ang, ANGLETURN2)
+		AIMING = P_Lerp(frac, viewpointswitch.startpoint.aim, AIMING)
+		
+		local newpos = Vec3.New(
+			P_Lerp(frac, viewpointswitch.startpoint.x, cammo.x),
+			P_Lerp(frac, viewpointswitch.startpoint.y, cammo.y),
+			P_Lerp(frac, viewpointswitch.startpoint.z, cammo.z)
+		)
+		newpos:ToMobjPos(cammo, true, false)
+		cammo.flags = $|MF_NOCLIP|MF_NOCLIPHEIGHT
+		
+		viewpointswitch.animation = $ - 1
 	end
 	
 	local updateangles = true
@@ -425,8 +480,9 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 	
 	if updateangles
 		cammo.angle = ANGLETURN2
+		cammo.aiming = AIMING
 	end
-	if camera.chase and not freecam_active
+	if cv_chasecam.value and not freecam_active
 		if updateangles
 			p.awayviewaiming = AIMING
 		end
@@ -437,17 +493,42 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 	end
 end)
 
+local blockingflags = (ML_IMPASSIBLE|ML_BLOCKMONSTERS)
 addHook("MobjLineCollide",function(ray, line)
 	if not ray.exactocam then return end
 	if not line then return end
 	
-	if (line.flags & (ML_IMPASSIBLE|ML_TWOSIDED|ML_BLOCKMONSTERS) == (ML_IMPASSIBLE|ML_TWOSIDED|ML_BLOCKMONSTERS))
+	if (line.flags & ML_TWOSIDED) and (line.flags & blockingflags)
 		return false
 	end
 end,MT_RAY)
 
+addHook("ThinkFrame",do
+	if (gamestate ~= GS_LEVEL) then return end
+	if (ExactoCam_Version > MYVERSION) then return end
+	
+	local p = displayplayer
+	if not (p and p.valid) then return end
+	local me = p.realmo
+	if not (me and me.valid) then return end
+	if (p.spectator) then return end
+	
+	-- check right before we set our exacto just incase it changes
+	if ((cammo and cammo.valid) and (p.awayviewmobj ~= cammo) and p.awayviewtics)
+		camerawasswitched = true
+	end
+end)
 addHook("PostThinkFrame",do
 	if (gamestate ~= GS_LEVEL) then return end
 	if (ExactoCam_Version > MYVERSION) then return end
 	ExactoCam_Thinker(displayplayer, camera)
+	camerawasswitched = false
+	
+	local p = displayplayer
+	if not (p and p.valid) then return end
+	
+	-- ummm why doesnt srb2 do this
+	if (p.awayviewtics == 0) and (p.awayviewmobj ~= nil)
+		p.awayviewmobj = nil
+	end
 end)
