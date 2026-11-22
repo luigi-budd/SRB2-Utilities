@@ -7,7 +7,7 @@ These are addons I always have loaded, as they help improve my gameplay experien
 Adds an extensive and customizable free-camera, togglable by command, "`freecam`".
 
 ## Exacto-Cam
-A camera script that replaces the vanilla camera with a more responsive version. Based off Roblox's camera, and also adds its "invisicam", where it can make objects blocking your view translucent.
+A camera script that replaces the vanilla camera with a more responsive version. Based off Roblox's camera, and also adds its "invisicam", where it can make objects blocking your view translucent. You can adjust your camera distance by holding **Control** and scrolling up or down with the mouse wheel. Hold **Control** and press down on the scroll wheel to reset your zoom.
 
 # Libraries
 These hold Lua scripts that provide utilities for their purposes.
@@ -17,6 +17,7 @@ Adds a Vec3 object. See inside for details.
 ```lua
 local forwardVector = Vec3.New(10*FU, 0, 0)
 local sidewaysVector = Vec3.New(0, 10*FU, 0)
+-- arithmetic operators supported as well!
 local myVector = forwardVector + sidewaysVector
 myVector:ToMobjMom(mobj, false)
 ```
