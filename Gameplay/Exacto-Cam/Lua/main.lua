@@ -1,4 +1,4 @@
-local MYVERSION = 113
+local MYVERSION = 115
 if rawget(_G, "ExactoCam_Version")
 	if ExactoCam_Version == MYVERSION then return end
 	if (ExactoCam_Version > MYVERSION) then return end
@@ -36,7 +36,7 @@ local function SafeVecPos(v, mo, absolute)
 		desty = $ + mo.y
 		destz = $ + mo.z
 	end
-	destz = clamp(mo.floorz + FU, $, mo.ceilingz - 30*FU)
+	--destz = clamp(mo.floorz + FU, $, mo.ceilingz - 30*FU)
 	
 	local oldmz = mo.momz
 	mo.momz = destz - mo.z
@@ -46,7 +46,15 @@ local function SafeVecPos(v, mo, absolute)
 	end
 	mo.momz = oldmz
 	
+	if not (mo.flags & MF_NOCLIPHEIGHT)
+		if mo.z >= mo.ceilingz - 30*FU then return false; end
+		if mo.z <= mo.floorz then return false; end
+	end
+	
 	if not P_TryMove(mo, destx, desty, true)
+		return false
+	end
+	if (mo.eflags & MFE_JUSTSTEPPEDDOWN)
 		return false
 	end
 	
@@ -92,6 +100,8 @@ local twodanim = 0
 
 local blockingmobjs = {}
 local movewasblocked = false
+local MAX_STEPS = 270
+local currentsteps = MAX_STEPS
 
 local dest_zoomfrac = FU
 local zoomfrac = dest_zoomfrac
@@ -149,6 +159,7 @@ local viewpointswitch = {
 
 addHook("ViewpointSwitch",function(p, next, forced)
 	if (ExactoCam_Version > MYVERSION) then return end
+	if not (cammo and cammo.valid) then return end
 	
 	local nmo = next.realmo
 	if not (nmo and nmo.valid) then return end
@@ -206,11 +217,13 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 	
 	zoomfrac = P_Lerp(FU / 4, $, dest_zoomfrac)
 	
+	local stepmul = FixedDiv(currentsteps*FU, MAX_STEPS*FU)
 	local camflip = P_MobjFlip(me)
 	local camdist = FixedMul(cv_camdist.value, me.scale)
 	camdist = FixedMul($, p.camerascale)
 	camdist = FixedMul($, zoomfrac)
 	camdist = FixedMul($, exitingzoom)
+	camdist = FixedMul($, stepmul)
 	camdist = $ + (20*FU - 20*me.scale)
 	
 	local camheight = FixedMul(cv_camheight.value, me.scale)
@@ -285,11 +298,14 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 	adjustVec = Vec3.Add(focusPos, adjustVec)
 	
 	-- clipping / poppercam
-	cammo.flags = ($ &~(MF_NOCLIP|MF_NOCLIPHEIGHT))|(me.flags & (MF_NOCLIP|MF_NOCLIPHEIGHT))
+	if currentsteps < MAX_STEPS
+		currentsteps = min($ + 2 + (MAX_STEPS - currentsteps)/4, MAX_STEPS)
+	end
+	cammo.flags = ($ &~(MF_NOCLIP))|(me.flags & (MF_NOCLIP))|MF_NOCLIPHEIGHT
 	if not (me.flags & (MF_NOCLIP|MF_NOCLIPHEIGHT) or p.powers[pw_carry] == CR_NIGHTSMODE or twod)
 	and (p.playerstate == PST_LIVE)
 		focusPos:ToMobjPos(cammo, true, false)
-		local steps = 270
+		local steps = MAX_STEPS
 		local offsetVec
 		offsetVec = Vec3.Sub(Vec3.Add(adjustVec, shiftVec), focusPos)
 		offsetVec = Vec3.Div(offsetVec, steps*FU)
@@ -301,7 +317,10 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 				cammo.momy = (destPos.y) - cammo.y
 				P_SlideMove(cammo)
 				cammo.momx,cammo.momy,cammo.momz = 0,0,0
+				cammo.z = clamp(cammo.floorz + FU, $, cammo.ceilingz - 30*FU)
+				
 				movewasblocked = true
+				currentsteps = min($, max(i, 30))
 				break
 			end
 		end
@@ -309,6 +328,7 @@ rawset(_G, "ExactoCam_Thinker", function(p, camera)
 		local destPos = Vec3.Add(adjustVec, shiftVec)
 		destPos:ToMobjPos(cammo, true, false)
 	end
+	cammo.eflags = $ &~MFE_JUSTSTEPPEDDOWN
 	
 	if (viewpointswitch.animation)
 		local frac = FU - FixedDiv(viewpointswitch.animation*FU, VIEW_MAXANIM*FU)
